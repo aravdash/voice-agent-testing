@@ -26,25 +26,82 @@ TTS_SERVER_URL = "https://6ldo5kjjcjvh5j-8000.proxy.runpod.net"
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "")
 
 # Initialize session state
-if 'conversation_history' in st.session_state:
-    conversation_history = st.session_state.conversation_history
-else:
-    conversation_history = [
+if 'conversation_history' not in st.session_state:
+    st.session_state.conversation_history = [
         {"role": "system", "content": """You are a helpful voice assistant for a medical clinic. 
         You help patients schedule appointments, answer questions about services, and provide general assistance.
         Keep responses concise and conversational since they will be spoken aloud.
         Be friendly and professional."""}
     ]
-    st.session_state.conversation_history = conversation_history
+
+if 'last_audio_hash' not in st.session_state:
+    st.session_state.last_audio_hash = None
+
+if 'processing_audio' not in st.session_state:
+    st.session_state.processing_audio = False
+
+conversation_history = st.session_state.conversation_history
 
 @st.cache_resource
 def load_whisper():
     """Load Whisper model once and cache it."""
     return WhisperModel("small.en", device="cpu", compute_type="int8")
 
+def is_audio_significant(audio_bytes):
+    """Check if audio contains significant content (not just silence/noise)."""
+    try:
+        # Convert bytes to numpy array for analysis
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+            temp_file.write(audio_bytes)
+            temp_filename = temp_file.name
+        
+        try:
+            # Read the audio file
+            with wave.open(temp_filename, 'rb') as wav_file:
+                frames = wav_file.readframes(-1)
+                sample_rate = wav_file.getframerate()
+                audio_data = np.frombuffer(frames, dtype=np.int16)
+            
+            # Calculate audio properties
+            if len(audio_data) == 0:
+                return False
+            
+            # Check duration (minimum 0.5 seconds)
+            duration = len(audio_data) / sample_rate
+            if duration < 0.5:
+                return False
+            
+            # Check volume/energy level
+            rms = np.sqrt(np.mean(audio_data.astype(float) ** 2))
+            # Threshold for significant audio (adjust as needed)
+            if rms < 500:  # Very quiet audio threshold
+                return False
+            
+            # Check for sustained audio (not just a brief spike)
+            window_size = int(sample_rate * 0.1)  # 100ms windows
+            windows = [audio_data[i:i+window_size] for i in range(0, len(audio_data), window_size)]
+            significant_windows = sum(1 for window in windows if len(window) > 0 and np.sqrt(np.mean(window.astype(float) ** 2)) > 300)
+            
+            # At least 30% of windows should have significant audio
+            if significant_windows / len(windows) < 0.3:
+                return False
+            
+            return True
+            
+        finally:
+            os.unlink(temp_filename)
+            
+    except Exception as e:
+        st.error(f"Audio analysis error: {e}")
+        return False
+
 def transcribe_audio(audio_bytes):
     """Transcribe audio to text."""
     try:
+        # First check if audio is significant enough to process
+        if not is_audio_significant(audio_bytes):
+            return None
+        
         whisper_model = load_whisper()
         
         # Save audio to temporary file
@@ -53,10 +110,16 @@ def transcribe_audio(audio_bytes):
             temp_filename = temp_file.name
         
         try:
-            # Transcribe
-            segments, info = whisper_model.transcribe(temp_filename, beam_size=5, language="en")
+            # Transcribe with VAD (Voice Activity Detection)
+            segments, info = whisper_model.transcribe(
+                temp_filename, 
+                beam_size=5, 
+                language="en",
+                vad_filter=True,  # Enable voice activity detection
+                vad_parameters=dict(min_silence_duration_ms=500)  # Require 500ms silence
+            )
             text = " ".join([segment.text.strip() for segment in segments])
-            return text.strip()
+            return text.strip() if text.strip() else None
         finally:
             os.unlink(temp_filename)
             
@@ -140,13 +203,16 @@ with col1:
         st.error("❌ Voice AI Server Offline")
         st.stop()
     
-    # Audio recorder
+    # Audio recorder with better configuration
     audio_bytes = audio_recorder(
         text="Click to record your message",
         recording_color="#e74c3c",
         neutral_color="#3498db",
         icon_name="microphone",
-        icon_size="2x"
+        icon_size="2x",
+        auto_start=False,  # Don't auto-start recording
+        energy_threshold=(-1.0, 1.0),  # More restrictive energy threshold
+        pause_threshold=1.0,  # Wait 1 second of silence before stopping
     )
     
     # Manual text input as fallback
@@ -179,34 +245,44 @@ with col2:
         else:
             st.markdown(f"**🤖 Assistant:** {message['content']}")
     
-    # Process audio input
-    if audio_bytes:
-        st.subheader("🔄 Processing Your Message")
+    # Process audio input with duplicate prevention
+    if audio_bytes and not st.session_state.processing_audio:
+        # Create hash of audio to prevent reprocessing
+        import hashlib
+        audio_hash = hashlib.md5(audio_bytes).hexdigest()
         
-        with st.spinner("Transcribing audio..."):
-            user_text = transcribe_audio(audio_bytes)
-        
-        if user_text and len(user_text.strip()) > 3:
-            st.success(f"📝 You said: *{user_text}*")
+        if audio_hash != st.session_state.last_audio_hash:
+            st.session_state.last_audio_hash = audio_hash
+            st.session_state.processing_audio = True
             
-            with st.spinner("Getting AI response..."):
-                ai_response = get_openai_response(user_text)
+            st.subheader("🔄 Processing Your Message")
             
-            st.success(f"🤖 Assistant: *{ai_response}*")
+            with st.spinner("Analyzing audio..."):
+                user_text = transcribe_audio(audio_bytes)
             
-            with st.spinner("Generating speech..."):
-                audio_base64 = synthesize_speech(ai_response)
-            
-            if audio_base64:
-                st.success("🔊 Click play to hear the response:")
-                # Decode and play audio
-                audio_data = base64.b64decode(audio_base64)
-                st.audio(audio_data, format="audio/wav")
-            
-            # Update conversation display
-            st.rerun()
-        else:
-            st.warning("❌ No clear speech detected. Please try again.")
+            if user_text and len(user_text.strip()) > 5:  # Require at least 5 characters
+                st.success(f"📝 You said: *{user_text}*")
+                
+                with st.spinner("Getting AI response..."):
+                    ai_response = get_openai_response(user_text)
+                
+                st.success(f"🤖 Assistant: *{ai_response}*")
+                
+                with st.spinner("Generating speech..."):
+                    audio_base64 = synthesize_speech(ai_response)
+                
+                if audio_base64:
+                    st.success("🔊 Click play to hear the response:")
+                    # Decode and play audio
+                    audio_data = base64.b64decode(audio_base64)
+                    st.audio(audio_data, format="audio/wav")
+                
+                # Update conversation display
+                st.session_state.processing_audio = False
+                st.rerun()
+            else:
+                st.warning("❌ No clear speech detected or speech too short. Please try again.")
+                st.session_state.processing_audio = False
 
 # Sidebar with info
 with st.sidebar:
@@ -234,4 +310,12 @@ with st.sidebar:
     
     if st.button("🗑️ Clear Conversation"):
         st.session_state.conversation_history = [conversation_history[0]]  # Keep system message
+        st.session_state.last_audio_hash = None
+        st.session_state.processing_audio = False
+        st.rerun()
+    
+    if st.button("🔄 Reset Audio Processing"):
+        st.session_state.last_audio_hash = None
+        st.session_state.processing_audio = False
+        st.success("Audio processing reset!")
         st.rerun()
