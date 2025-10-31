@@ -1,0 +1,6 @@
+streamlit
+audio-recorder-streamlit
+requests
+openai
+faster-whisper
+numpy
