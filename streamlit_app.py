@@ -40,6 +40,12 @@ if 'last_audio_hash' not in st.session_state:
 if 'processing_audio' not in st.session_state:
     st.session_state.processing_audio = False
 
+if 'current_audio' not in st.session_state:
+    st.session_state.current_audio = None
+
+if 'current_audio_message' not in st.session_state:
+    st.session_state.current_audio_message = None
+
 conversation_history = st.session_state.conversation_history
 
 @st.cache_resource
@@ -228,8 +234,10 @@ with col1:
             audio_base64 = synthesize_speech(ai_response)
         
         if audio_base64:
-            # Decode and play audio
+            # Store audio in session state for persistence
             audio_data = base64.b64decode(audio_base64)
+            st.session_state.current_audio = audio_data
+            st.session_state.current_audio_message = ai_response
             st.audio(audio_data, format="audio/wav")
         
         # Add to conversation display
@@ -244,6 +252,14 @@ with col2:
             st.markdown(f"**🗣️ You:** {message['content']}")
         else:
             st.markdown(f"**🤖 Assistant:** {message['content']}")
+    
+    # Display current audio if available
+    if st.session_state.current_audio is not None:
+        st.markdown("---")
+        st.markdown("**🔊 Latest Response:**")
+        if st.session_state.current_audio_message:
+            st.markdown(f"*{st.session_state.current_audio_message}*")
+        st.audio(st.session_state.current_audio, format="audio/wav")
     
     # Process audio input with duplicate prevention
     if audio_bytes and not st.session_state.processing_audio:
@@ -272,14 +288,16 @@ with col2:
                     audio_base64 = synthesize_speech(ai_response)
                 
                 if audio_base64:
-                    st.success("🔊 Click play to hear the response:")
-                    # Decode and play audio
+                    # Store audio in session state
                     audio_data = base64.b64decode(audio_base64)
+                    st.session_state.current_audio = audio_data
+                    st.session_state.current_audio_message = ai_response
+                    
+                    st.success("🔊 Click play to hear the response:")
                     st.audio(audio_data, format="audio/wav")
                 
-                # Update conversation display
+                # Don't rerun immediately - let user interact with audio
                 st.session_state.processing_audio = False
-                st.rerun()
             else:
                 st.warning("❌ No clear speech detected or speech too short. Please try again.")
                 st.session_state.processing_audio = False
@@ -312,10 +330,14 @@ with st.sidebar:
         st.session_state.conversation_history = [conversation_history[0]]  # Keep system message
         st.session_state.last_audio_hash = None
         st.session_state.processing_audio = False
+        st.session_state.current_audio = None
+        st.session_state.current_audio_message = None
         st.rerun()
     
     if st.button("🔄 Reset Audio Processing"):
         st.session_state.last_audio_hash = None
         st.session_state.processing_audio = False
+        st.session_state.current_audio = None
+        st.session_state.current_audio_message = None
         st.success("Audio processing reset!")
         st.rerun()
