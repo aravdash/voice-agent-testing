@@ -248,6 +248,55 @@ with col1:
     if st.session_state.recorded_audio and not st.session_state.processing_audio:
         audio_bytes = st.session_state.recorded_audio
         st.session_state.recorded_audio = None  # Clear after processing
+        
+        # Convert audio input to bytes if needed
+        import hashlib
+        
+        if hasattr(audio_bytes, 'read'):
+            # It's a file-like object from st.audio_input()
+            audio_data = audio_bytes.read()
+            audio_bytes.seek(0)  # Reset for later use
+        else:
+            # It's already bytes
+            audio_data = audio_bytes
+        
+        # Create hash of audio to prevent reprocessing
+        audio_hash = hashlib.md5(audio_data).hexdigest()
+        
+        if audio_hash != st.session_state.last_audio_hash:
+            st.session_state.last_audio_hash = audio_hash
+            st.session_state.processing_audio = True
+            
+            st.subheader("🔄 Processing Your Message")
+            
+            with st.spinner("Analyzing audio..."):
+                # Use the raw audio data for transcription
+                user_text = transcribe_audio(audio_data)
+            
+            if user_text and len(user_text.strip()) > 5:  # Require at least 5 characters
+                st.success(f"📝 You said: *{user_text}*")
+                
+                with st.spinner("Getting AI response..."):
+                    ai_response = get_openai_response(user_text)
+                
+                st.success(f"🤖 Assistant: *{ai_response}*")
+                
+                with st.spinner("Generating speech..."):
+                    audio_base64 = synthesize_speech(ai_response)
+                
+                if audio_base64:
+                    # Store audio in session state
+                    audio_data_response = base64.b64decode(audio_base64)
+                    st.session_state.current_audio = audio_data_response
+                    st.session_state.current_audio_message = ai_response
+                    
+                    st.success("🔊 Audio response generated! Check the conversation section below.")
+                
+                # Don't rerun immediately - let user interact with audio
+                st.session_state.processing_audio = False
+            else:
+                st.warning("❌ No clear speech detected or speech too short. Please try again.")
+                st.session_state.processing_audio = False
     
     # Manual text input as fallback
     st.subheader("✏️ Text Input (Alternative)")
@@ -288,58 +337,6 @@ with col2:
         if st.session_state.current_audio_message:
             st.markdown(f"*{st.session_state.current_audio_message}*")
         st.audio(st.session_state.current_audio, format="audio/wav")
-    
-    # Process audio input with duplicate prevention
-    if audio_bytes and not st.session_state.processing_audio:
-        # Convert audio input to bytes if needed
-        import hashlib
-        
-        if hasattr(audio_bytes, 'read'):
-            # It's a file-like object from st.audio_input()
-            audio_data = audio_bytes.read()
-            audio_bytes.seek(0)  # Reset for later use
-        else:
-            # It's already bytes
-            audio_data = audio_bytes
-        
-        # Create hash of audio to prevent reprocessing
-        audio_hash = hashlib.md5(audio_data).hexdigest()
-        
-        if audio_hash != st.session_state.last_audio_hash:
-            st.session_state.last_audio_hash = audio_hash
-            st.session_state.processing_audio = True
-            
-            st.subheader("🔄 Processing Your Message")
-            
-            with st.spinner("Analyzing audio..."):
-                # Use the raw audio data for transcription
-                user_text = transcribe_audio(audio_data)
-            
-            if user_text and len(user_text.strip()) > 5:  # Require at least 5 characters
-                st.success(f"📝 You said: *{user_text}*")
-                
-                with st.spinner("Getting AI response..."):
-                    ai_response = get_openai_response(user_text)
-                
-                st.success(f"🤖 Assistant: *{ai_response}*")
-                
-                with st.spinner("Generating speech..."):
-                    audio_base64 = synthesize_speech(ai_response)
-                
-                if audio_base64:
-                    # Store audio in session state
-                    audio_data = base64.b64decode(audio_base64)
-                    st.session_state.current_audio = audio_data
-                    st.session_state.current_audio_message = ai_response
-                    
-                    st.success("🔊 Audio response generated! Check the conversation section below.")
-                
-                # Don't rerun immediately - let user interact with audio
-                st.session_state.processing_audio = False
-            else:
-                st.warning("❌ No clear speech detected or speech too short. Please try again.")
-                st.session_state.processing_audio = False
-
 # Sidebar with info
 with st.sidebar:
     st.header("ℹ️ About")
