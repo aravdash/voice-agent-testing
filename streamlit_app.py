@@ -291,9 +291,19 @@ with col2:
     
     # Process audio input with duplicate prevention
     if audio_bytes and not st.session_state.processing_audio:
-        # Create hash of audio to prevent reprocessing
+        # Convert audio input to bytes if needed
         import hashlib
-        audio_hash = hashlib.md5(audio_bytes).hexdigest()
+        
+        if hasattr(audio_bytes, 'read'):
+            # It's a file-like object from st.audio_input()
+            audio_data = audio_bytes.read()
+            audio_bytes.seek(0)  # Reset for later use
+        else:
+            # It's already bytes
+            audio_data = audio_bytes
+        
+        # Create hash of audio to prevent reprocessing
+        audio_hash = hashlib.md5(audio_data).hexdigest()
         
         if audio_hash != st.session_state.last_audio_hash:
             st.session_state.last_audio_hash = audio_hash
@@ -302,7 +312,8 @@ with col2:
             st.subheader("🔄 Processing Your Message")
             
             with st.spinner("Analyzing audio..."):
-                user_text = transcribe_audio(audio_bytes)
+                # Use the raw audio data for transcription
+                user_text = transcribe_audio(audio_data)
             
             if user_text and len(user_text.strip()) > 5:  # Require at least 5 characters
                 st.success(f"📝 You said: *{user_text}*")
