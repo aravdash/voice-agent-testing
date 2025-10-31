@@ -12,14 +12,14 @@ import wave
 
 # Page config
 st.set_page_config(
-    page_title="Clinic Voice Assistant Demo",
-    page_icon="🏥",
+    page_title="Veterinary Clinic Voice Assistant Demo",
+    page_icon="🐾",
     layout="wide"
 )
 
 # Title and description
-st.title("🏥 Clinic Voice Assistant Demo")
-st.markdown("*Talk to our AI assistant to schedule appointments and get information*")
+st.title("🐾 Veterinary Clinic Voice Assistant Demo")
+st.markdown("*Talk to our AI assistant to schedule pet appointments and get information*")
 
 # Configuration
 TTS_SERVER_URL = "https://6ldo5kjjcjvh5j-8000.proxy.runpod.net"
@@ -28,10 +28,7 @@ OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "")
 # Initialize session state
 if 'conversation_history' not in st.session_state:
     st.session_state.conversation_history = [
-        {"role": "system", "content": """You are a helpful voice assistant for a medical clinic. 
-        You help patients schedule appointments, answer questions about services, and provide general assistance.
-        Keep responses concise and conversational since they will be spoken aloud.
-        Be friendly and professional."""}
+        {"role": "system", "content": """You are a helpful voice assistant for a veterinary clinic to help callers schedule their appointment. Keep responses very concise, as much as possible while still being conversational and kind. Sound as natural as possible as well, using contractions and lingo like "gimme" (instead of give me) to sound as human as possible for the TTS component."""}
     ]
 
 if 'last_audio_hash' not in st.session_state:
@@ -341,13 +338,13 @@ with col2:
 with st.sidebar:
     st.header("ℹ️ About")
     st.markdown("""
-    This is a demo of our AI-powered clinic voice assistant.
+    This is a demo of our AI-powered veterinary clinic voice assistant.
     
     **Features:**
     - 🎤 Voice input and output
     - 🤖 AI-powered responses
-    - 📅 Appointment scheduling help
-    - ❓ General clinic information
+    - 📅 Pet appointment scheduling help
+    - ❓ General vet clinic information
     
     **How to use:**
     1. Click 'Start Recording' to begin
@@ -357,9 +354,10 @@ with st.sidebar:
     5. Listen to the spoken answer in the conversation
     
     **Example questions:**
-    - "I'd like to schedule an appointment"
-    - "What services do you offer?"
+    - "I need to schedule an appointment for my dog"
+    - "What services do you offer for cats?"
     - "What are your hours?"
+    - "My pet needs a checkup"
     """)
     
     if st.button("🗑️ Clear Conversation"):
