@@ -213,88 +213,126 @@ with col1:
         st.error("❌ Voice AI Server Offline")
         st.stop()
     
-    # Manual recording toggle  
-    col_mic1, col_mic2 = st.columns([1, 3])
+    # Recording method selection
+    recording_method = st.radio(
+        "Choose recording method:",
+        ["One-Click Recording", "Manual Recording"],
+        index=0
+    )
     
-    with col_mic1:
-        if not st.session_state.is_recording:
-            if st.button("🎤 Start Recording", type="primary"):
-                st.session_state.is_recording = True
-                st.session_state.recorded_audio = None
-                st.rerun()
-        else:
-            if st.button("🛑 Stop Recording", type="secondary"):
-                st.session_state.is_recording = False
-                st.rerun()
-    
-    with col_mic2:
-        if st.session_state.is_recording:
-            st.markdown("**🔴 RECORDING... Click 'Stop Recording' when done**")
-        else:
-            st.markdown("**⚪ Click 'Start Recording' to begin**")
-    
-    # Audio input when recording
-    if st.session_state.is_recording:
-        audio_bytes = st.audio_input("Recording in progress...", key="voice_input")
+    if recording_method == "One-Click Recording":
+        # Simple one-click recording with audio_recorder_streamlit
+        st.markdown("**Click the microphone to record, click again to stop**")
+        audio_bytes = audio_recorder(
+            text="Click to record",
+            recording_color="#e74c3c",
+            neutral_color="#1f77b4",
+            icon_name="microphone",
+            icon_size="2x",
+            key="voice_recorder"
+        )
+        
         if audio_bytes:
             st.session_state.recorded_audio = audio_bytes
-            st.session_state.is_recording = False
             st.success("✅ Recording captured! Processing...")
-            st.rerun()
+    
+    else:
+        # Manual recording toggle  
+        col_mic1, col_mic2 = st.columns([1, 3])
+        
+        with col_mic1:
+            if not st.session_state.is_recording:
+                if st.button("🎤 Start Recording", type="primary"):
+                    st.session_state.is_recording = True
+                    st.session_state.recorded_audio = None
+                    st.rerun()
+            else:
+                if st.button("🛑 Stop Recording", type="secondary"):
+                    st.session_state.is_recording = False
+                    st.rerun()
+        
+        with col_mic2:
+            if st.session_state.is_recording:
+                st.markdown("**🔴 RECORDING... Click 'Stop Recording' when done**")
+            else:
+                st.markdown("**⚪ Click 'Start Recording' to begin**")
+        
+        # Audio input when recording
+        if st.session_state.is_recording:
+            try:
+                audio_bytes = st.audio_input("Recording in progress...", key="voice_input")
+                if audio_bytes:
+                    st.session_state.recorded_audio = audio_bytes
+                    st.session_state.is_recording = False
+                    st.success("✅ Recording captured! Processing...")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Audio recording error: {e}")
+                st.info("Try using 'One-Click Recording' method instead")
+                st.session_state.is_recording = False
     
     # Process recorded audio
     if st.session_state.recorded_audio and not st.session_state.processing_audio:
         audio_bytes = st.session_state.recorded_audio
         st.session_state.recorded_audio = None  # Clear after processing
         
-        # Convert audio input to bytes if needed
-        import hashlib
-        
-        if hasattr(audio_bytes, 'read'):
-            # It's a file-like object from st.audio_input()
-            audio_data = audio_bytes.read()
-            audio_bytes.seek(0)  # Reset for later use
-        else:
-            # It's already bytes
-            audio_data = audio_bytes
-        
-        # Create hash of audio to prevent reprocessing
-        audio_hash = hashlib.md5(audio_data).hexdigest()
-        
-        if audio_hash != st.session_state.last_audio_hash:
-            st.session_state.last_audio_hash = audio_hash
-            st.session_state.processing_audio = True
+        try:
+            # Convert audio input to bytes if needed
+            import hashlib
             
-            st.subheader("🔄 Processing Your Message")
-            
-            with st.spinner("Analyzing audio..."):
-                # Use the raw audio data for transcription
-                user_text = transcribe_audio(audio_data)
-            
-            if user_text and len(user_text.strip()) > 5:  # Require at least 5 characters
-                st.success(f"📝 You said: *{user_text}*")
-                
-                with st.spinner("Getting AI response..."):
-                    ai_response = get_openai_response(user_text)
-                
-                st.success(f"🤖 Assistant: *{ai_response}*")
-                
-                with st.spinner("Generating speech..."):
-                    audio_base64 = synthesize_speech(ai_response)
-                
-                if audio_base64:
-                    # Store audio in session state
-                    audio_data_response = base64.b64decode(audio_base64)
-                    st.session_state.current_audio = audio_data_response
-                    st.session_state.current_audio_message = ai_response
-                    
-                    st.success("🔊 Audio response generated! Check the conversation section below.")
-                
-                # Don't rerun immediately - let user interact with audio
-                st.session_state.processing_audio = False
+            if hasattr(audio_bytes, 'read'):
+                # It's a file-like object from st.audio_input()
+                audio_data = audio_bytes.read()
+                if hasattr(audio_bytes, 'seek'):
+                    audio_bytes.seek(0)  # Reset for later use
             else:
-                st.warning("❌ No clear speech detected or speech too short. Please try again.")
-                st.session_state.processing_audio = False
+                # It's already bytes (from audio_recorder)
+                audio_data = audio_bytes
+            
+            # Create hash of audio to prevent reprocessing
+            audio_hash = hashlib.md5(audio_data).hexdigest()
+            
+            if audio_hash != st.session_state.last_audio_hash:
+                st.session_state.last_audio_hash = audio_hash
+                st.session_state.processing_audio = True
+                
+                st.subheader("🔄 Processing Your Message")
+                
+                with st.spinner("Analyzing audio..."):
+                    # Use the raw audio data for transcription
+                    user_text = transcribe_audio(audio_data)
+                
+                if user_text and len(user_text.strip()) > 5:  # Require at least 5 characters
+                    st.success(f"📝 You said: *{user_text}*")
+                    
+                    with st.spinner("Getting AI response..."):
+                        ai_response = get_openai_response(user_text)
+                    
+                    st.success(f"🤖 Assistant: *{ai_response}*")
+                    
+                    with st.spinner("Generating speech..."):
+                        audio_base64 = synthesize_speech(ai_response)
+                    
+                    if audio_base64:
+                        # Store audio in session state
+                        audio_data_response = base64.b64decode(audio_base64)
+                        st.session_state.current_audio = audio_data_response
+                        st.session_state.current_audio_message = ai_response
+                        
+                        st.success("🔊 Audio response generated! Check the conversation section below.")
+                    
+                    # Don't rerun immediately - let user interact with audio
+                    st.session_state.processing_audio = False
+                else:
+                    st.warning("❌ No clear speech detected or speech too short. Please try again.")
+                    st.session_state.processing_audio = False
+            else:
+                st.info("This audio has already been processed.")
+                
+        except Exception as e:
+            st.error(f"Error processing audio: {e}")
+            st.info("Please try recording again")
+            st.session_state.processing_audio = False
     
     # Manual text input as fallback
     st.subheader("✏️ Text Input (Alternative)")
