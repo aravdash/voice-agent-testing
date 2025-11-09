@@ -22,8 +22,8 @@ st.title("🐾 Veterinary Clinic Voice Assistant Demo")
 st.markdown("*Talk to our AI assistant to schedule pet appointments and get information*")
 
 # Configuration
-TTS_SERVER_URL = "https://csjs5vnk4ga3c9-8000.proxy.runpod.net"  # Your new pod URL
-# Old URL: "https://6ldo5kjjcjvh5j-8000.proxy.runpod.net"
+TTS_SERVER_URL = "https://z2x193s8czzcun-8000.proxy.runpod.net"  # L40S pod URL
+# Old RTX 5090 URL: "https://csjs5vnk4ga3c9-8000.proxy.runpod.net"
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "")
 
 # Initialize session state
