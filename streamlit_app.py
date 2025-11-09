@@ -44,6 +44,12 @@ if 'current_audio' not in st.session_state:
 if 'current_audio_message' not in st.session_state:
     st.session_state.current_audio_message = None
 
+if 'is_recording' not in st.session_state:
+    st.session_state.is_recording = False
+
+if 'recorded_audio' not in st.session_state:
+    st.session_state.recorded_audio = None
+
 conversation_history = st.session_state.conversation_history
 
 @st.cache_resource
@@ -207,22 +213,39 @@ with col1:
         st.error("❌ Voice AI Server Offline")
         st.stop()
     
-    # Voice Recording Section
-    st.markdown("**🎤 Voice Recording:**")
+    # Manual recording toggle  
+    col_mic1, col_mic2 = st.columns([1, 3])
     
-    # Use audio_recorder component with manual control
-    audio_bytes = audio_recorder(
-        text="Click to start/stop recording",
-        recording_color="#e74c3c",
-        neutral_color="#3498db", 
-        icon_name="microphone",
-        icon_size="2x",
-        pause_threshold=2.0,  # Wait 2 seconds of silence
-        sample_rate=16000     # Standard sample rate
-    )
+    with col_mic1:
+        if not st.session_state.is_recording:
+            if st.button("🎤 Start Recording", type="primary"):
+                st.session_state.is_recording = True
+                st.session_state.recorded_audio = None
+                st.rerun()
+        else:
+            if st.button("🛑 Stop Recording", type="secondary"):
+                st.session_state.is_recording = False
+                st.rerun()
     
-    # Process recorded audio immediately when available
-    if audio_bytes and not st.session_state.processing_audio:
+    with col_mic2:
+        if st.session_state.is_recording:
+            st.markdown("**🔴 RECORDING... Click 'Stop Recording' when done**")
+        else:
+            st.markdown("**⚪ Click 'Start Recording' to begin**")
+    
+    # Audio input when recording
+    if st.session_state.is_recording:
+        audio_bytes = st.audio_input("Recording in progress...", key="voice_input")
+        if audio_bytes:
+            st.session_state.recorded_audio = audio_bytes
+            st.session_state.is_recording = False
+            st.success("✅ Recording captured! Processing...")
+            st.rerun()
+    
+    # Process recorded audio
+    if st.session_state.recorded_audio and not st.session_state.processing_audio:
+        audio_bytes = st.session_state.recorded_audio
+        st.session_state.recorded_audio = None  # Clear after processing
         
         # Convert audio input to bytes if needed
         import hashlib
@@ -344,6 +367,8 @@ with st.sidebar:
         st.session_state.processing_audio = False
         st.session_state.current_audio = None
         st.session_state.current_audio_message = None
+        st.session_state.is_recording = False
+        st.session_state.recorded_audio = None
         st.rerun()
     
     if st.button("🔄 Reset Audio Processing"):
@@ -351,5 +376,7 @@ with st.sidebar:
         st.session_state.processing_audio = False
         st.session_state.current_audio = None
         st.session_state.current_audio_message = None
+        st.session_state.is_recording = False
+        st.session_state.recorded_audio = None
         st.success("Audio processing reset!")
         st.rerun()
