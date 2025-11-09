@@ -213,19 +213,22 @@ with col1:
         st.error("❌ Voice AI Server Offline")
         st.stop()
     
-    # Audio recorder with waveform visualization
-    st.markdown("**🎤 Click the microphone to start recording, click again to stop**")
+    # Voice Recording Section
+    st.markdown("**🎤 Voice Recording:**")
     
+    # Use audio_recorder component with manual control
     audio_bytes = audio_recorder(
-        text="Click to record",
+        text="Click to start/stop recording",
         recording_color="#e74c3c",
-        neutral_color="#1f77b4", 
+        neutral_color="#3498db", 
         icon_name="microphone",
         icon_size="2x",
-        key="voice_recorder"
+        pause_threshold=2.0,  # Wait 2 seconds of silence
+        sample_rate=16000     # Standard sample rate
     )
     
-    if audio_bytes:
+    # Process recorded audio immediately when available
+    if audio_bytes and not st.session_state.processing_audio:
         st.session_state.recorded_audio = audio_bytes
         st.success("✅ Recording captured! Processing...")
     
