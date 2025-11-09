@@ -213,63 +213,21 @@ with col1:
         st.error("❌ Voice AI Server Offline")
         st.stop()
     
-    # Recording method selection
-    recording_method = st.radio(
-        "Choose recording method:",
-        ["One-Click Recording", "Manual Recording"],
-        index=0
+    # Audio recorder with waveform visualization
+    st.markdown("**🎤 Click the microphone to start recording, click again to stop**")
+    
+    audio_bytes = audio_recorder(
+        text="Click to record",
+        recording_color="#e74c3c",
+        neutral_color="#1f77b4", 
+        icon_name="microphone",
+        icon_size="2x",
+        key="voice_recorder"
     )
     
-    if recording_method == "One-Click Recording":
-        # Simple one-click recording with audio_recorder_streamlit
-        st.markdown("**Click the microphone to record, click again to stop**")
-        audio_bytes = audio_recorder(
-            text="Click to record",
-            recording_color="#e74c3c",
-            neutral_color="#1f77b4",
-            icon_name="microphone",
-            icon_size="2x",
-            key="voice_recorder"
-        )
-        
-        if audio_bytes:
-            st.session_state.recorded_audio = audio_bytes
-            st.success("✅ Recording captured! Processing...")
-    
-    else:
-        # Manual recording toggle  
-        col_mic1, col_mic2 = st.columns([1, 3])
-        
-        with col_mic1:
-            if not st.session_state.is_recording:
-                if st.button("🎤 Start Recording", type="primary"):
-                    st.session_state.is_recording = True
-                    st.session_state.recorded_audio = None
-                    st.rerun()
-            else:
-                if st.button("🛑 Stop Recording", type="secondary"):
-                    st.session_state.is_recording = False
-                    st.rerun()
-        
-        with col_mic2:
-            if st.session_state.is_recording:
-                st.markdown("**🔴 RECORDING... Click 'Stop Recording' when done**")
-            else:
-                st.markdown("**⚪ Click 'Start Recording' to begin**")
-        
-        # Audio input when recording
-        if st.session_state.is_recording:
-            try:
-                audio_bytes = st.audio_input("Recording in progress...", key="voice_input")
-                if audio_bytes:
-                    st.session_state.recorded_audio = audio_bytes
-                    st.session_state.is_recording = False
-                    st.success("✅ Recording captured! Processing...")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Audio recording error: {e}")
-                st.info("Try using 'One-Click Recording' method instead")
-                st.session_state.is_recording = False
+    if audio_bytes:
+        st.session_state.recorded_audio = audio_bytes
+        st.success("✅ Recording captured! Processing...")
     
     # Process recorded audio
     if st.session_state.recorded_audio and not st.session_state.processing_audio:
